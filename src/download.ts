@@ -57,6 +57,21 @@ export async function downloadFileWithProgress(
   const outputPath = path.join(outputDir, filename);
   ensureDirForFile(outputPath);
 
+  // Check if file already exists and skip
+  if (fs.existsSync(outputPath)) {
+    console.log(`File already exists, skipping: ${filename}`);
+    res.data.destroy();
+    return outputPath;
+  }
+
+  // Download to temporary .download file
+  const tempPath = `${outputPath}.download`;
+
+  // Clean up any existing incomplete download
+  if (fs.existsSync(tempPath)) {
+    fs.unlinkSync(tempPath);
+  }
+
   const totalBytesHeader = res.headers["content-length"];
   const totalBytes =
     typeof totalBytesHeader === "string" ? Number(totalBytesHeader) : undefined;
@@ -92,7 +107,11 @@ export async function downloadFileWithProgress(
     }
   });
 
-  await pipeline(res.data, fs.createWriteStream(outputPath));
+  // Download to temporary file
+  await pipeline(res.data, fs.createWriteStream(tempPath));
+
+  // Rename to final filename after successful download
+  fs.renameSync(tempPath, outputPath);
 
   // final emit
   onProgress?.({
